@@ -10,6 +10,7 @@
 //= require jquery/jquery.autosize
 //= require i18n/translations
 //= require strophe
+//= require turbolinks
 
 // TODO: These jquery plugins are probably not used anymore
 //= require jquery/jquery.livequery
