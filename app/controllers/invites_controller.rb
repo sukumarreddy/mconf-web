@@ -14,9 +14,9 @@ class InvitesController < ApplicationController
     end
 
     tags = []
-    members = Profile.where("full_name like ?", "%#{params[:q]}%").select(['full_name', 'id']).limit(10)
+    members = Profile.where("full_name like ?", "%#{params[:q]}%").select(['full_name', 'user_id']).limit(10)
     members.each do |f|
-      tags.push("id"=>f.id, "name"=>f.full_name)
+      tags.push("id"=>f.user_id, "name"=>f.full_name)
     end
 
     respond_to do |format|
@@ -46,26 +46,29 @@ class InvitesController < ApplicationController
       priv_msg[:sender_id] = current_user.id
       priv_email[:sender_id] = current_user.id
 
-      # message body
-      body = t('invite.message', :sender => current_user.name, :name => params[:invite][:room_name],
-               :invite_url => params[:invite][:room_url], :message => params[:invite][:message],
-               :mobile_url => params[:invite][:mobile_url]).html_safe
       unless params[:invite][:message].empty?
         priv_email[:body] = params[:invite][:message]
       end
-      priv_msg[:body] = body
-
-      priv_msg[:title] = t('invite.title')
-      priv_email[:title] = t('invite.title')
       priv_email[:room_name] = params[:invite][:room_name]
       priv_email[:room_url] = params[:invite][:room_url]
       priv_email[:mobile_url] = params[:invite][:mobile_url]
       priv_email[:user_name] = current_user.name
-      priv_email[:locale] = current_user.locale
+      priv_email[:locale] = get_user_locale(current_user)
 
       if params[:invite][:im_check] != "0"
         for receiver in params[:invite][:members_tokens].split(",")
           priv_msg[:receiver_id] = receiver
+          user = User.find(receiver)
+          locale = get_user_locale(user, false)
+          I18n.with_locale(locale) do
+            priv_msg[:title] = t('invite.title')
+            body = t('invite.message', :sender => current_user.name, :name => params[:invite][:room_name],
+                     :invite_url => params[:invite][:room_url], :message => params[:invite][:message],
+                     :mobile_url => params[:invite][:mobile_url],
+                     :email_sender => current_user.email).html_safe
+            priv_msg[:body] = body
+          end
+
           private_message = PrivateMessage.new(priv_msg)
           if private_message.save
             @success_messages << private_message
@@ -78,10 +81,11 @@ class InvitesController < ApplicationController
       end
 
       if params[:invite][:email_check] != "0"
-        emailSended = true
         for receiver in params[:invite][:members_tokens].split(",")
           user = User.find(receiver)
           priv_email[:email_receiver] = user.email
+          priv_email[:email_sender] = current_user.email
+          priv_email[:locale] = get_user_locale(user, false)
           Notifier.delay.webconference_invite_email(priv_email)
           if success.size == 0
             success = t('invite.invitation_successfully') << " " << t('invite.email', :email => user.email)
@@ -92,10 +96,12 @@ class InvitesController < ApplicationController
       end
 
       if params[:invite][:email_tokens].size != 0
-        for receiver in params[:invite][:email_tokens].split(/;|,/)
-          priv_email[:email_receiver] = receiver
-          Notifier.delay.webconference_invite_email(priv_email)
+        for receiver in params[:invite][:email_tokens].split(/[;, ]/).reject(&:blank?)
+          receiver.strip!
           if (receiver =~ /^[-a-z0-9_+\.]+\@([-a-z0-9]+\.)+[a-z0-9]{2,4}$/i)
+            priv_email[:email_receiver] = receiver
+            priv_email[:email_sender] = current_user.email
+            Notifier.delay.webconference_invite_email(priv_email)
             if success.size == 0
               success = t('invite.invitation_successfully') << " " << t('invite.email', :email => receiver)
             else
@@ -105,7 +111,7 @@ class InvitesController < ApplicationController
             if error.size == 0
               error = t('invite.invitation_unsuccessfully') << " " <<  t('invite.email', :email => receiver) << " " << t('invite.bad_format')
             else
-              error << ", " <<  t('invite.email', :email => receiver) << " " << t('invite.wrong_formatted')
+              error << ", " <<  t('invite.email', :email => receiver) << " " << t('invite.bad_format')
             end
           end
         end
@@ -145,7 +151,7 @@ class InvitesController < ApplicationController
         for receiver in params[:invite][:members_tokens].split(",")
           user = User.find(receiver)
           msg_email[:receiver] = user.email
-          msg_email[:locale] = user.locale
+          msg_email[:user] = user
           Notifier.delay.event_invitation_email(msg_email)
 
           if success.size == 0
@@ -160,7 +166,7 @@ class InvitesController < ApplicationController
       if params[:invite][:email_tokens].size != 0
         for receiver in params[:invite][:email_tokens].split(/;|,/)
           msg_email[:receiver] = receiver
-          msg_email[:locale] = current_site.locale
+          msg_email[:user] = nil
           Notifier.delay.event_invitation_email(msg_email)
 
           if (receiver =~ /^[-a-z0-9_+\.]+\@([-a-z0-9]+\.)+[a-z0-9]{2,4}$/i)
@@ -173,7 +179,7 @@ class InvitesController < ApplicationController
             if error.size == 0
               error = t('invite.invitation_unsuccessfully') << " " <<  t('invite.email', :email => receiver) << " " << t('invite.bad_format')
             else
-              error << ", " <<  t('invite.email', :email => receiver) << " " << t('invite.wrong_formatted')
+              error << ", " <<  t('invite.email', :email => receiver) << " " << t('invite.bad_format')
             end
           end
         end

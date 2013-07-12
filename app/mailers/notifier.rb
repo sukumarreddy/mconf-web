@@ -33,7 +33,7 @@ class Notifier < ActionMailer::Base
     end
     @replyto = invitation.introducer.email
 
-    create_default_mail(@user.locale)
+    create_default_mail(get_locale_from_user(@user))
   end
 
 
@@ -41,7 +41,7 @@ class Notifier < ActionMailer::Base
     setup_email(invitation[:receiver])
 
     @sender = invitation[:sender]
-    @locale = invitation[:locale]
+    @locale = get_locale_from_user(invitation[:user])
     @event = invitation[:event]
     @replyto = invitation[:sender].email
     @subject = t('event.invite_title', :username => @sender.full_name, :eventname => @event.name, :space => @event.space.name, :locale => @locale).html_safe
@@ -58,7 +58,7 @@ class Notifier < ActionMailer::Base
     @receiver = notification[:receiver]
     @replyto = @sender.email
 
-    create_default_mail(@receiver.locale)
+    create_default_mail(get_locale_from_user(@receiver))
   end
 
   def performance_update_notification_email(sender,receiver,stage,rol)
@@ -78,7 +78,7 @@ class Notifier < ActionMailer::Base
     @receiver = receiver
     @replyto = sender.email
 
-    create_default_mail(receiver.locale)
+    create_default_mail(get_locale_from_user(receiver))
   end
 
   def space_group_invitation_email(space,mail)
@@ -118,7 +118,7 @@ class Notifier < ActionMailer::Base
     @action = action
     @replyto = invitation.email
 
-    create_default_mail(receiver.locale)
+    create_default_mail(get_locale_from_user(receiver))
   end
 
   def join_request_email(jr,receiver)
@@ -129,7 +129,7 @@ class Notifier < ActionMailer::Base
     @signature  = Site.current.signature_in_html
     @replyto = jr.candidate.email
 
-    create_default_mail(receiver.locale)
+    create_default_mail(get_locale_from_user(receiver))
   end
 
   def processed_join_request_email(jr)
@@ -141,7 +141,7 @@ class Notifier < ActionMailer::Base
     @space = jr.group
     @action = action
 
-    create_default_mail(jr.candidate.locale)
+    create_default_mail(get_locale_from_user(jr.candidate))
   end
 
   #This is used when an user registers in the application, in order to confirm his registration
@@ -154,7 +154,7 @@ class Notifier < ActionMailer::Base
     @contact_email = Site.current.smtp_sender
     @signature  = Site.current.signature_in_html
 
-    create_default_mail(user.locale)
+    create_default_mail(get_locale_from_user(user))
   end
 
   def activation(user)
@@ -167,7 +167,7 @@ class Notifier < ActionMailer::Base
     @sitename  = Site.current.name
     @signature  = Site.current.signature_in_html
 
-    create_default_mail(user.locale)
+    create_default_mail(get_locale_from_user(user))
   end
 
   #This is used when a user asks for his password.
@@ -180,7 +180,7 @@ class Notifier < ActionMailer::Base
     @url  = "http://#{Site.current.domain}/reset_password/#{user.reset_password_code}"
     @signature  = Site.current.signature_in_html
 
-    create_default_mail(user.locale)
+    create_default_mail(get_locale_from_user(user))
   end
 
   #this method is used when a user has asked for his old password, and then he resets it.
@@ -191,17 +191,17 @@ class Notifier < ActionMailer::Base
     @sitename  = Site.current.name
     @signature = Site.current.signature_in_html
 
-    create_default_mail(user.locale)
+    create_default_mail(get_locale_from_user(user))
   end
 
   #this method is used when a user has sent feedback to the admin.
   def feedback_email(email, subject, body)
     setup_email(Site.current.smtp_sender)
 
-    @from = email
     @subject += I18n.t("feedback.one").html_safe + " " + subject
     @text = body
     @user = email
+    @replyto = email
 
     create_default_mail(I18n.default_locale)
   end
@@ -210,10 +210,10 @@ class Notifier < ActionMailer::Base
   def spam_email(user,subject, body, url)
     setup_email(Site.current.smtp_sender)
 
-    @from = user.email
+    @replyto = user.email
     @subject += subject
-    @text = I18n.t("spam.item").html_safe + ": " + url + "<br/>"
-    @text += body
+    @text = I18n.t("spam.item").html_safe + ": " + url
+    @user_message = body
     @user = user.full_name
     @sitename  = Site.current.name
     @signature  = Site.current.signature_in_html
@@ -224,13 +224,16 @@ class Notifier < ActionMailer::Base
   def webconference_invite_email(params)
     setup_email(params[:email_receiver])
 
-    @sender = params[:user_name]
-    @room_name = params[:room_name]
-    @room_url = params[:room_url]
-    @mobile_url = params[:mobile_url]
-    @subject = params[:title]
-    @message = params[:body]
-    @signature  = Site.current.signature_in_html
+    I18n.with_locale(params[:locale]) do
+      @sender = params[:user_name]
+      @room_name = params[:room_name]
+      @room_url = params[:room_url]
+      @mobile_url = params[:mobile_url]
+      @subject = t('invite.title')
+      @message = params[:body]
+      @signature  = Site.current.signature_in_html
+      @replyto = params[:email_sender]
+    end
 
     create_default_mail(params[:locale])
   end
@@ -252,7 +255,7 @@ class Notifier < ActionMailer::Base
     @subject = t('email.digest.title', :type => @type, :locale => @locale)
     @signature  = Site.current.signature_in_html
 
-    create_default_mail(@locale)
+    create_default_mail(get_locale_from_user(receiver))
   end
 
   private
@@ -260,15 +263,36 @@ class Notifier < ActionMailer::Base
   def setup_email(recipients)
     @recipients = recipients
     @from = "#{ Site.current.name } <#{ Site.current.smtp_sender }>"
+    @replyto = @from
     @subject = I18n.t("vcc_mail_label").html_safe + " "
-    @sent_on = Time.now
     @content_type ="text/html"
   end
 
   def create_default_mail(locale)
     I18n.with_locale(locale) do
-      mail(:to => @recipients, :subject => @subject, :from => @from, :headers => @headers, "Reply-To" => @replyto)
+      mail(:to => @recipients, :subject => @subject, :from => @from, :headers => @headers, :reply_to => @replyto)
     end
+  end
+
+  def get_locale_from_user(user)
+
+    # user locale
+    if not user.nil? and user.is_a?(User) and
+        user.locale.present? and is_locale_available?(user.locale)
+      user.locale.to_sym
+
+    # site locale
+    elsif Site.current and Site.current.locale and is_locale_available?(Site.current.locale)
+      Site.current.locale.to_sym
+
+    # default locale - last fallback
+    else
+      I18n.default_locale
+    end
+  end
+
+  def is_locale_available?(locale)
+    I18n.available_locales.include?(locale.to_sym)
   end
 
 end
