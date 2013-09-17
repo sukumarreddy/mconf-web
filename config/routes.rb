@@ -57,12 +57,7 @@ Mconf::Application.routes.draw do
   match '/secure', :to => 'shibboleth#create', :as => "shibboleth"
   match '/secure/info', :to => 'shibboleth#info', :as => "shibboleth_info"
 
-  resources :machines do
-    collection do
-      get :contact_mail
-      get :my_mailer
-    end
-  end
+  resources :institutions
 
   resources :spaces do
 
@@ -169,9 +164,10 @@ Mconf::Application.routes.draw do
   # The unique Site is created in db/seeds and can only be edited
   resource :site, :only => [:show, :edit, :update]
 
-  match '/manage/users', :to => 'manage#users', :as => 'manage_users'
-  match '/manage/spaces', :to => 'manage#spaces', :as => 'manage_spaces'
-  match '/manage/spam', :to => 'manage#spam', :as => 'manage_spam'
+  # Management routes
+  ['users', 'spaces', 'institutions', 'spam'].each do |resource|
+    match "/manage/#{resource}", :to => "manage##{resource}", :as => "manage_#{resource}"
+  end
 
   # Locale controller (globalize)
   resource :session_locale
