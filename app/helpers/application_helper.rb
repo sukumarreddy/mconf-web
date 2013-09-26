@@ -148,4 +148,8 @@ module ApplicationHelper
     "#{request.protocol}#{request.host_with_port}/webconf"
   end
 
+
+  def restrict_user
+    redirect_to root_path
+  end
 end

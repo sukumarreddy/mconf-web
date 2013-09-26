@@ -241,7 +241,7 @@ DEPENDENCIES
   httparty
   jquery-rails (>= 0.2.6)
   mysql2 (~> 0.2.0)
-  nokogiri (= 1.4.1)
+  nokogiri
   passenger (= 3.0.11)
   populator
   prism

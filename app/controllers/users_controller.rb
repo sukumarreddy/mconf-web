@@ -20,9 +20,10 @@ require "digest/sha1"
 class UsersController < ApplicationController
   include ActionController::StationResources
   include ActionController::Agents
+  include ApplicationHelper
 
   before_filter :space!, :only => [ :index ]
-
+  before_filter :restrict_user, :only => [ :show,:edit ]
   # Permission filters
   authorization_filter [ :read, :performance ], :space, :only => [ :index ]
   authorization_filter :update, :user, :only => [ :edit, :update ]

@@ -53,13 +53,7 @@
       <%= t('invite_people.email.one') %>
    </div>
 
-    <div class="block">
-      <h3><%= t('invite_people.other_people') %></h3>
-
-      <%= f.label :email_tokens, t('invite_people.email.other') %>
-      <span class="tip">(<%= t('invite_people.emails_tip') %>)</span><br/>
-      <%= f.text_field :email_tokens, :size => 76 %>
-    </div>
+    
 
     <div class="block">
       <% if @type != "event" %>
