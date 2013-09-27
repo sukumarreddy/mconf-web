@@ -20,7 +20,6 @@ require "digest/sha1"
 class UsersController < ApplicationController
   include ActionController::StationResources
   include ActionController::Agents
-  include ApplicationHelper
 
   before_filter :space!, :only => [ :index ]
   before_filter :restrict_user, :only => [ :show,:edit ]
@@ -278,6 +277,10 @@ class UsersController < ApplicationController
         render :json => json, :callback => params[:callback]
       }
     end
+  end
+
+  def restrict_user
+    redirect_to root_path
   end
 
 end
